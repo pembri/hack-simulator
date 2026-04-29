@@ -606,4 +606,86 @@ tbody tr:hover {
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 900px) {
-    .auth-gr
+    .auth-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .input-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .main-header {
+        padding: 15px 20px;
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .logo h1 {
+        font-size: 18px;
+    }
+    
+    .action-bar {
+        flex-direction: column;
+    }
+    
+    .btn-mega, .btn-mega-secondary, .btn-outline {
+        width: 100%;
+    }
+    
+    .table-stats {
+        gap: 10px;
+        font-size: 12px;
+    }
+    
+    th, td {
+        padding: 8px 6px;
+        font-size: 12px;
+    }
+    
+    .url-cell {
+        max-width: 150px;
+    }
+}
+
+@media (max-width: 600px) {
+    .container {
+        padding: 15px 10px;
+    }
+    
+    .panel {
+        padding: 15px;
+    }
+    
+    .panel h2 {
+        font-size: 15px;
+    }
+}
+
+/* ===== ANIMATIONS ===== */
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.loading {
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+tbody tr {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes glow {
+    0%, 100% { box-shadow: 0 4px 15px var(--orange-glow); }
+    50% { box-shadow: 0 4px 25px var(--orange-glow), 0 0 30px var(--orange-glow); }
+}
+
+.btn-mega:not(:disabled) {
+    animation: glow 2s infinite;
+}
+
