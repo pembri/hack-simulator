@@ -3,84 +3,141 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SAI Console Manager - VIP</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <title>GSC VIP Manager - Professional Indexing Tool</title>
     <link rel="stylesheet" href="style.css">
+    <!-- jsrsasign untuk RS256 JWT Signing di browser -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/10.8.6/jsrsasign-all-min.js"></script>
 </head>
-<body class="bg-slate-950 text-slate-200 min-h-screen">
+<body>
+    <header class="main-header">
+        <div class="logo">
+            <span class="logo-icon">🔥</span>
+            <h1>GSC VIP <span class="accent">MANAGER</span></h1>
+        </div>
+        <div class="header-info">
+            <span class="badge">PRO EDITION</span>
+        </div>
+    </header>
 
-    <div class="container mx-auto px-4 py-8 max-w-5xl">
-        <div class="flex flex-col md:flex-row justify-between items-center mb-8 bg-slate-900 p-6 rounded-2xl border border-orange-500/30 shadow-lg shadow-orange-500/10">
-            <div>
-                <h1 class="text-3xl font-black text-orange-500 tracking-tighter">SAI CONSOLE <span class="text-white">MANAGER</span></h1>
-                <p class="text-slate-400 text-sm">Status: <span id="authStatus" class="text-red-500 font-bold">Disconnected</span></p>
-            </div>
-            <div class="mt-4 md:mt-0 text-center md:text-right">
-                <p class="text-xs uppercase tracking-widest text-slate-500 mb-1">Jatah Kuota VIP (Daily)</p>
-                <div class="flex items-center gap-3">
-                    <div class="w-48 h-3 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
-                        <div id="quotaBar" class="h-full bg-orange-600 transition-all duration-500" style="width: 100%"></div>
+    <main class="container">
+        <!-- PANEL AUTH & QUOTA -->
+        <section class="panel auth-panel">
+            <h2><span class="icon">🔐</span> Authentication & Quota</h2>
+            <div class="auth-grid">
+                <div class="auth-input">
+                    <label for="jsonFile">Service Account JSON File</label>
+                    <input type="file" id="jsonFile" accept=".json">
+                    <div id="authStatus" class="status-text">⚠️ Belum ada file diupload</div>
+                </div>
+                <div class="quota-display">
+                    <h3>Daily Quota</h3>
+                    <div class="quota-bar-container">
+                        <div id="quotaBar" class="quota-bar"></div>
                     </div>
-                    <span id="quotaCount" class="text-xl font-mono font-bold text-orange-500">200/200</span>
+                    <div class="quota-text">
+                        <span id="quotaUsed">0</span> / <span id="quotaLimit">200</span> Requests
+                    </div>
+                    <button id="resetQuotaBtn" class="btn-small">Reset Quota</button>
                 </div>
             </div>
-        </div>
+        </section>
 
-        <div class="mb-8 p-6 bg-slate-900 rounded-2xl border border-slate-800">
-            <label class="block text-sm font-bold mb-2 text-orange-400">1. Upload Google Service Account (JSON Key)</label>
-            <input type="file" id="jsonInput" accept=".json" class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-600 file:text-white hover:file:bg-orange-700 cursor-pointer">
-            <p id="fileInfo" class="mt-2 text-xs text-slate-500 italic hidden"></p>
-        </div>
+        <!-- PANEL INPUT UTAMA -->
+        <section class="panel input-panel">
+            <h2><span class="icon">⚡</span> Input Operations</h2>
+            <div class="input-grid">
+                <!-- Manual Indexing -->
+                <div class="input-card">
+                    <h3>📤 Manual Indexing</h3>
+                    <p class="card-desc">Submit single URL to Google Indexing API</p>
+                    <input type="url" id="manualUrl" placeholder="https://example.com/page">
+                    <button id="submitManualBtn" class="btn-primary">SUBMIT URL</button>
+                </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 text-sm">
-            <div class="p-5 bg-slate-900 rounded-2xl border border-slate-800 hover:border-orange-500/50 transition">
-                <h3 class="font-bold text-orange-500 mb-3"><i class="fas fa-rocket mr-2"></i>MINTA INDEX (TUNGGAL)</h3>
-                <input type="text" id="targetUrl" placeholder="https://web-lo.com/post-baru" class="w-full bg-slate-950 border border-slate-800 p-3 rounded-lg focus:outline-none focus:border-orange-500 mb-3 text-xs">
-                <button id="btnIndex" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 rounded-lg transition shadow-lg">GAS INDEX</button>
+                <!-- Sitemap Massal -->
+                <div class="input-card">
+                    <h3>🗺️ Sitemap Bulk Scan</h3>
+                    <p class="card-desc">Auto-scan all URLs from sitemap.xml</p>
+                    <input type="url" id="sitemapUrl" placeholder="https://example.com/sitemap.xml">
+                    <button id="loadSitemapBtn" class="btn-primary">LOAD SITEMAP</button>
+                </div>
+
+                <!-- URL Removal -->
+                <div class="input-card">
+                    <h3>🗑️ URL Removal</h3>
+                    <p class="card-desc">Remove URL from Google Index</p>
+                    <input type="url" id="removeUrl" placeholder="https://example.com/old-page">
+                    <button id="removeUrlBtn" class="btn-danger">REMOVE URL</button>
+                </div>
             </div>
+        </section>
 
-            <div class="p-5 bg-slate-900 rounded-2xl border border-slate-800 hover:border-orange-500/50 transition">
-                <h3 class="font-bold text-blue-400 mb-3"><i class="fas fa-sitemap mr-2"></i>SITEMAP MASSAL</h3>
-                <input type="text" id="sitemapUrl" placeholder="https://web-lo.com/sitemap.xml" class="w-full bg-slate-950 border border-slate-800 p-3 rounded-lg focus:outline-none focus:border-blue-500 mb-3 text-xs">
-                <button id="btnSitemap" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg transition shadow-lg text-xs">SCAN & SUBMIT</button>
+        <!-- ACTION BAR -->
+        <section class="panel action-panel">
+            <div class="action-bar">
+                <button id="scanAllBtn" class="btn-mega">
+                    🔍 SCAN ALL INDEX STATUS
+                </button>
+                <button id="submitAllBtn" class="btn-mega-secondary">
+                    🚀 INDEX ALL URLS
+                </button>
+                <button id="clearAllBtn" class="btn-outline">
+                    🗑️ CLEAR ALL
+                </button>
+                <button id="exportBtn" class="btn-outline">
+                    📥 EXPORT CSV
+                </button>
             </div>
+            <div id="progressContainer" class="progress-container hidden">
+                <div class="progress-info">
+                    <span id="progressText">Processing...</span>
+                    <span id="progressCount">0/0</span>
+                </div>
+                <div class="progress-bar-container">
+                    <div id="progressBar" class="progress-bar"></div>
+                </div>
+            </div>
+        </section>
 
-            <div class="p-5 bg-slate-900 rounded-2xl border border-slate-800 hover:border-red-500/50 transition">
-                <h3 class="font-bold text-red-500 mb-3"><i class="fas fa-trash-alt mr-2"></i>HAPUS INDEX</h3>
-                <input type="text" id="deleteUrl" placeholder="https://web-lo.com/post-mati" class="w-full bg-slate-950 border border-slate-800 p-3 rounded-lg focus:outline-none focus:border-red-500 mb-3 text-xs">
-                <button id="btnDelete" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-lg transition shadow-lg text-xs">HAPUS DARI GOOGLE</button>
+        <!-- TABLE MONITORING -->
+        <section class="panel table-panel">
+            <h2><span class="icon">📊</span> URL Monitoring Table</h2>
+            <div class="table-stats">
+                <div class="stat-item"><span class="stat-label">Total:</span> <span id="statTotal">0</span></div>
+                <div class="stat-item"><span class="stat-label">Indexed:</span> <span id="statIndexed" class="success">0</span></div>
+                <div class="stat-item"><span class="stat-label">Not Indexed:</span> <span id="statNotIndexed" class="danger">0</span></div>
+                <div class="stat-item"><span class="stat-label">Pending:</span> <span id="statPending" class="warning">0</span></div>
             </div>
-        </div>
-
-        <div class="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
-            <div class="p-4 bg-slate-800/50 flex justify-between items-center border-b border-slate-700">
-                <h2 class="font-bold text-slate-200 tracking-wide uppercase text-sm italic">Data Monitoring & Real-time Inspection</h2>
-                <button onclick="clearHistory()" class="text-xs text-red-400 hover:text-red-300 font-bold underline">Bersihkan List</button>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left">
+            <div class="table-wrapper">
+                <table id="urlTable">
                     <thead>
-                        <tr class="bg-slate-950/50 text-slate-500 text-[10px] uppercase tracking-widest">
-                            <th class="px-6 py-4">URL Link</th>
-                            <th class="px-6 py-4 text-center">API Status</th>
-                            <th class="px-6 py-4 text-center">Status Di Google</th>
-                            <th class="px-6 py-4 text-right">Aksi</th>
+                        <tr>
+                            <th>#</th>
+                            <th>URL Link</th>
+                            <th>API Status</th>
+                            <th>Google Index Status</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
-                    <tbody id="indexList" class="divide-y divide-slate-800 text-xs">
-                        </tbody>
+                    <tbody id="tableBody">
+                        <tr class="empty-row">
+                            <td colspan="5">No URLs added yet. Use the input panels above.</td>
+                        </tr>
+                    </tbody>
                 </table>
             </div>
-        </div>
-    </div>
+        </section>
 
-    <div id="loader" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur flex items-center justify-center z-50">
-        <div class="text-center">
-            <i class="fas fa-circle-notch fa-spin text-4xl text-orange-500 mb-4"></i>
-            <p id="loaderText" class="text-sm font-bold text-white">Memproses Data...</p>
-        </div>
-    </div>
+        <!-- LOG PANEL -->
+        <section class="panel log-panel">
+            <h2><span class="icon">📋</span> Activity Log</h2>
+            <div id="logContainer" class="log-container"></div>
+        </section>
+    </main>
+
+    <footer class="main-footer">
+        <p>GSC VIP Manager &copy; 2026 | Built with jsrsasign + corsproxy.io</p>
+    </footer>
 
     <script src="app.js"></script>
 </body>
