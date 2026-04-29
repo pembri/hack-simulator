@@ -1,28 +1,155 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+/* ============================================================
+   SAI ROOTS CONSOLE MANAGER - CUSTOM STYLESHEET
+   ============================================================ */
 
-body {
-    background-color: #050505;
-    color: #f0f0f0;
-    font-family: 'Inter', sans-serif;
-    overflow-x: hidden;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono&display=swap');
+
+:root {
+    --bg-main: #050505;
+    --bg-card: #0d0d0d;
+    --bg-input: #000000;
+    --border-color: #1a1a1a;
+    --accent-green: #2D8659;
+    --accent-blue: #2563eb;
+    --accent-red: #dc2626;
+    --accent-yellow: #fbbf24;
+    --text-primary: #f0f0f0;
+    --text-secondary: #6b7280;
 }
 
+/* Base Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    line-height: 1.6;
+}
+
+/* Utilities */
+.hidden { display: none !important; }
+
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg-main); }
+::-webkit-scrollbar-thumb { background: #222; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent-green); }
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade { animation: fadeIn 0.4s ease-out forwards; }
+
+/* Login Section Enhancement */
+#login-section {
+    background: radial-gradient(circle at center, #111 0%, #050505 100%);
+}
+
+#login-section .bg-neutral-900 {
+    box-shadow: 0 25px 50px -12px rgba(0, 255, 100, 0.1);
+}
+
+/* Menu Cards */
+.menu-card {
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.menu-card:active { transform: scale(0.95); }
+
+.menu-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    height: 2px;
+    transition: width 0.3s ease;
+}
+
+.menu-card:hover:after { width: 100%; }
+.menu-card:hover { background-color: #111; }
+
+/* Tab Navigation */
 .tab-active {
-    border-bottom: 2px solid #2D8659;
-    color: #2D8659;
+    border-bottom: 2px solid var(--accent-green);
+    color: var(--accent-green);
+    font-weight: 700;
 }
 
 .tab-inactive {
-    color: #555;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
 }
 
-pre {
-    word-break: break-all;
-    line-height: 1.5;
+/* List Items (URLs) */
+.url-item {
+    background: linear-gradient(to right, #0a0a0a, #0d0d0d);
+    transition: transform 0.2s ease, border-color 0.2s ease;
+    animation: fadeIn 0.3s ease-out forwards;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: #050505; }
-::-webkit-scrollbar-thumb { background: #222; border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover { background: #2D8659; }
+.url-item:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+    transform: translateX(5px);
+}
+
+/* Modal / Pop-up Styles */
+.backdrop-blur-sm {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+/* Log / Console Output */
+pre#log-minta-indeks, 
+pre#log-uji-url, 
+pre#log-sitemap, 
+pre#output {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    overflow-x: auto;
+}
+
+/* Custom Buttons Ripple Effect (Simple) */
+button {
+    position: relative;
+    overflow: hidden;
+}
+
+/* Responsive Grid Adjustments */
+@media (max-width: 768px) {
+    .menu-card {
+        padding: 1rem;
+    }
+    
+    #dashboard-section main {
+        padding: 1rem;
+    }
+}
+
+/* Status Badges */
+.badge-passed { color: var(--accent-green); background: rgba(45, 134, 89, 0.1); }
+.badge-failed { color: var(--accent-red); background: rgba(220, 38, 38, 0.1); }
+
+/* Input Styling Focus */
+input:focus {
+    box-shadow: 0 0 0 2px rgba(45, 134, 89, 0.2);
+}
+
+/* Hapus Index Specific Hover */
+.btn-delete-index:hover {
+    background-color: #ff0000;
+    box-shadow: 0 0 15px rgba(220, 38, 38, 0.4);
+}
