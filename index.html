@@ -3,128 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Console Manager - VIP Indexing</title>
+    <title>SAI Console Manager - VIP</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #0f172a; color: #f8fafc; }
-        .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
-        .btn-primary { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); transition: all 0.3s ease; }
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4); }
-        .status-badge { padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
-<body class="min-h-screen pb-10">
+<body class="bg-slate-950 text-slate-200 min-h-screen">
 
-    <!-- Header -->
-    <header class="p-6 border-b border-slate-800 mb-8 bg-slate-900/50 sticky top-0 z-50">
-        <div class="max-w-4xl mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-bold flex items-center gap-2">
-                <i class="fas fa-bolt text-yellow-400"></i> Console Manager
-            </h1>
-            <div id="authStatus" class="text-xs text-slate-400 flex items-center gap-2">
-                <span class="w-2 h-2 bg-red-500 rounded-full"></span> Belum Terhubung
+    <div class="container mx-auto px-4 py-8 max-w-5xl">
+        <div class="flex flex-col md:flex-row justify-between items-center mb-8 bg-slate-900 p-6 rounded-2xl border border-orange-500/30 shadow-lg shadow-orange-500/10">
+            <div>
+                <h1 class="text-3xl font-black text-orange-500 tracking-tighter">SAI CONSOLE <span class="text-white">MANAGER</span></h1>
+                <p class="text-slate-400 text-sm">Status: <span id="authStatus" class="text-red-500 font-bold">Disconnected</span></p>
+            </div>
+            <div class="mt-4 md:mt-0 text-center md:text-right">
+                <p class="text-xs uppercase tracking-widest text-slate-500 mb-1">Jatah Kuota VIP (Daily)</p>
+                <div class="flex items-center gap-3">
+                    <div class="w-48 h-3 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+                        <div id="quotaBar" class="h-full bg-orange-600 transition-all duration-500" style="width: 100%"></div>
+                    </div>
+                    <span id="quotaCount" class="text-xl font-mono font-bold text-orange-500">200/200</span>
+                </div>
             </div>
         </div>
-    </header>
 
-    <main class="max-w-4xl mx-auto px-4 space-y-6">
-        
-        <!-- Section 1: JSON Key Authorization -->
-        <section class="glass-card p-6 rounded-2xl">
-            <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
-                <i class="fas fa-key text-blue-400"></i> Otorisasi Kunci JSON
-            </h2>
-            <div class="border-2 border-dashed border-slate-700 rounded-xl p-8 text-center" id="dropZone">
-                <input type="file" id="jsonInput" class="hidden" accept=".json">
-                <label for="jsonInput" class="cursor-pointer">
-                    <i class="fas fa-cloud-upload-alt text-4xl text-slate-500 mb-3"></i>
-                    <p class="text-sm text-slate-400">Klik atau geser file <code class="text-blue-400">.json</code> ke sini</p>
-                </label>
-                <div id="fileInfo" class="mt-4 hidden text-sm text-green-400 font-mono"></div>
-            </div>
-        </section>
-
-        <!-- Section 2: Instant URL Indexing & Sitemap -->
-        <div class="grid md:grid-cols-2 gap-6">
-            <section class="glass-card p-6 rounded-2xl">
-                <h2 class="text-lg font-semibold mb-4">Request Indexing</h2>
-                <div class="space-y-4">
-                    <input type="url" id="targetUrl" placeholder="https://web-lo.com/artikel-baru" 
-                        class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <button id="btnIndex" class="w-full btn-primary py-2 rounded-lg font-semibold text-sm">
-                        Kirim ke Google
-                    </button>
-                    <p class="text-[10px] text-slate-500 text-center italic">Kuota: 200 URL/Hari</p>
-                </div>
-            </section>
-
-            <section class="glass-card p-6 rounded-2xl">
-                <h2 class="text-lg font-semibold mb-4">Sitemap Submitter</h2>
-                <div class="space-y-4">
-                    <input type="url" id="sitemapUrl" placeholder="https://web-lo.com/sitemap.xml" 
-                        class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <button id="btnSitemap" class="w-full bg-slate-700 hover:bg-slate-600 py-2 rounded-lg font-semibold text-sm transition-all">
-                        Update Sitemap
-                    </button>
-                </div>
-            </section>
+        <div class="mb-8 p-6 bg-slate-900 rounded-2xl border border-slate-800">
+            <label class="block text-sm font-bold mb-2 text-orange-400">1. Upload Google Service Account (JSON Key)</label>
+            <input type="file" id="jsonInput" accept=".json" class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-600 file:text-white hover:file:bg-orange-700 cursor-pointer">
+            <p id="fileInfo" class="mt-2 text-xs text-slate-500 italic hidden"></p>
         </div>
 
-        <!-- Section 3: Index List Display & Quick Removal -->
-        <section class="glass-card p-6 rounded-2xl">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-lg font-semibold flex items-center gap-2">
-                    <i class="fas fa-list text-green-400"></i> Index List Display
-                </h2>
-                <button id="btnRefresh" class="text-xs bg-blue-500/10 text-blue-400 px-3 py-1 rounded-full hover:bg-blue-500/20">
-                    <i class="fas fa-sync-alt"></i> Refresh Data
-                </button>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 text-sm">
+            <div class="p-5 bg-slate-900 rounded-2xl border border-slate-800 hover:border-orange-500/50 transition">
+                <h3 class="font-bold text-orange-500 mb-3"><i class="fas fa-rocket mr-2"></i>MINTA INDEX (TUNGGAL)</h3>
+                <input type="text" id="targetUrl" placeholder="https://web-lo.com/post-baru" class="w-full bg-slate-950 border border-slate-800 p-3 rounded-lg focus:outline-none focus:border-orange-500 mb-3 text-xs">
+                <button id="btnIndex" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 rounded-lg transition shadow-lg">GAS INDEX</button>
             </div>
 
+            <div class="p-5 bg-slate-900 rounded-2xl border border-slate-800 hover:border-orange-500/50 transition">
+                <h3 class="font-bold text-blue-400 mb-3"><i class="fas fa-sitemap mr-2"></i>SITEMAP MASSAL</h3>
+                <input type="text" id="sitemapUrl" placeholder="https://web-lo.com/sitemap.xml" class="w-full bg-slate-950 border border-slate-800 p-3 rounded-lg focus:outline-none focus:border-blue-500 mb-3 text-xs">
+                <button id="btnSitemap" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg transition shadow-lg text-xs">SCAN & SUBMIT</button>
+            </div>
+
+            <div class="p-5 bg-slate-900 rounded-2xl border border-slate-800 hover:border-red-500/50 transition">
+                <h3 class="font-bold text-red-500 mb-3"><i class="fas fa-trash-alt mr-2"></i>HAPUS INDEX</h3>
+                <input type="text" id="deleteUrl" placeholder="https://web-lo.com/post-mati" class="w-full bg-slate-950 border border-slate-800 p-3 rounded-lg focus:outline-none focus:border-red-500 mb-3 text-xs">
+                <button id="btnDelete" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-lg transition shadow-lg text-xs">HAPUS DARI GOOGLE</button>
+            </div>
+        </div>
+
+        <div class="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
+            <div class="p-4 bg-slate-800/50 flex justify-between items-center border-b border-slate-700">
+                <h2 class="font-bold text-slate-200 tracking-wide uppercase text-sm italic">Data Monitoring & Real-time Inspection</h2>
+                <button onclick="clearHistory()" class="text-xs text-red-400 hover:text-red-300 font-bold underline">Bersihkan List</button>
+            </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-left">
                     <thead>
-                        <tr class="text-slate-500 text-xs uppercase border-b border-slate-800">
-                            <th class="pb-3 font-medium">URL Halaman</th>
-                            <th class="pb-3 font-medium text-center">Status</th>
-                            <th class="pb-3 font-medium text-right">Aksi</th>
+                        <tr class="bg-slate-950/50 text-slate-500 text-[10px] uppercase tracking-widest">
+                            <th class="px-6 py-4">URL Link</th>
+                            <th class="px-6 py-4 text-center">API Status</th>
+                            <th class="px-6 py-4 text-center">Status Di Google</th>
+                            <th class="px-6 py-4 text-right">Aksi</th>
                         </tr>
                     </thead>
-                    <tbody id="indexList" class="text-sm">
-                        <!-- Contoh Data (Nanti diisi via app.js) -->
-                        <tr class="border-b border-slate-800/50">
-                            <td class="py-4 text-slate-300">https://pembri.com/roots-reggae</td>
-                            <td class="py-4 text-center">
-                                <span class="status-badge bg-green-500/10 text-green-500">Terindeks</span>
-                            </td>
-                            <td class="py-4 text-right">
-                                <button class="text-red-400 hover:text-red-300 text-xs">
-                                    <i class="fas fa-trash-alt"></i> Hapus
-                                </button>
-                            </td>
-                        </tr>
-                    </tbody>
+                    <tbody id="indexList" class="divide-y divide-slate-800 text-xs">
+                        </tbody>
                 </table>
             </div>
-        </section>
-
-    </main>
-
-    <!-- Modal Status Inspector -->
-    <div id="statusModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center p-4">
-        <div class="glass-card max-w-md w-full p-6 rounded-2xl border-blue-500/30">
-            <h3 class="text-lg font-bold mb-2">URL Inspection</h3>
-            <div id="inspectionResult" class="text-sm text-slate-400 space-y-2">
-                <!-- Hasil inspeksi muncul di sini -->
-            </div>
-            <button onclick="document.getElementById('statusModal').classList.add('hidden')" 
-                class="mt-6 w-full py-2 bg-slate-700 rounded-lg">Tutup</button>
         </div>
     </div>
 
-    <!-- Script Placeholder (Nanti kita buat app.js) -->
+    <div id="loader" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur flex items-center justify-center z-50">
+        <div class="text-center">
+            <i class="fas fa-circle-notch fa-spin text-4xl text-orange-500 mb-4"></i>
+            <p id="loaderText" class="text-sm font-bold text-white">Memproses Data...</p>
+        </div>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>
