@@ -116,26 +116,67 @@ async function getAccessToken() {
     const jwt = KJUR.jws.JWS.sign('RS256', JSON.stringify(header), JSON.stringify(payload), STATE.serviceAccount.private_key);
     log('JWT signed successfully', 'success');
     
-    const response = await fetch(proxyUrl(CONFIG.TOKEN_URL), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-            grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-            assertion: jwt
-        })
-    });
+    // Multi-proxy fallback list
+    const proxies = [
+        { url: 'https://api.allorigins.win/raw?url=', encode: true },
+        { url: 'https://api.codetabs.com/v1/proxy?quest=', encode: true },
+        { url: 'https://corsproxy.io/?', encode: true },
+        { url: 'https://cors.eu.org/', encode: false },
+        { url: 'https://proxy.cors.sh/', encode: false }
+    ];
     
-    if (!response.ok) {
-        const err = await response.text();
-        throw new Error('Token request failed: ' + err);
+    let lastError = null;
+    
+    for (const proxy of proxies) {
+        try {
+            log(`Trying proxy: ${proxy.url}`, 'info');
+            
+            const targetUrl = proxy.encode 
+                ? proxy.url + encodeURIComponent(CONFIG.TOKEN_URL)
+                : proxy.url + CONFIG.TOKEN_URL;
+            
+            const response = await fetch(targetUrl, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'x-cors-api-key': 'temp_anything'
+                },
+                body: new URLSearchParams({
+                    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                    assertion: jwt
+                })
+            });
+            
+            if (!response.ok) {
+                const errText = await response.text();
+                log(`Proxy ${proxy.url} returned ${response.status}: ${errText.substring(0, 100)}`, 'warning');
+                lastError = new Error(`HTTP ${response.status}: ${errText}`);
+                continue;
+            }
+            
+            const data = await response.json();
+            
+            if (data.access_token) {
+                STATE.accessToken = data.access_token;
+                STATE.tokenExpiry = Date.now() + (data.expires_in * 1000);
+                log(`✅ Token OK via ${proxy.url}`, 'success');
+                // Save working proxy
+                CONFIG.WORKING_PROXY = proxy;
+                return STATE.accessToken;
+            } else {
+                log(`Proxy ${proxy.url}: invalid response`, 'warning');
+                lastError = new Error('Invalid response: ' + JSON.stringify(data));
+            }
+        } catch (err) {
+            log(`Proxy ${proxy.url} failed: ${err.message}`, 'warning');
+            lastError = err;
+            continue;
+        }
     }
     
-    const data = await response.json();
-    STATE.accessToken = data.access_token;
-    STATE.tokenExpiry = Date.now() + (data.expires_in * 1000);
-    log('Access Token OK ✅', 'success');
-    return STATE.accessToken;
+    throw new Error('SEMUA proxy gagal. Coba ganti jaringan/VPN. Error terakhir: ' + (lastError?.message || 'unknown'));
 }
+
 
 // ===== UPLOAD HANDLER (FIXED & VERBOSE) =====
 $('jsonFile').addEventListener('change', async (e) => {
