@@ -1,6 +1,5 @@
 /* ============================================
-   GSC VIP MANAGER - APP.JS
-   Service Account JWT Auth + Indexing API + URL Inspection
+   GSC VIP MANAGER - APP.JS (FIXED VERSION)
    ============================================ */
 
 // ===== CONFIG =====
@@ -11,10 +10,9 @@ const CONFIG = {
     INDEXING_API: 'https://indexing.googleapis.com/v3/urlNotifications:publish',
     INSPECTION_API: 'https://searchconsole.googleapis.com/v1/urlInspection/index:inspect',
     DAILY_LIMIT: 200,
-    DELAY_BETWEEN_REQUESTS: 1200 // ms
+    DELAY_BETWEEN_REQUESTS: 1200
 };
 
-// ===== STATE =====
 let STATE = {
     serviceAccount: null,
     accessToken: null,
@@ -24,7 +22,6 @@ let STATE = {
     quotaDate: new Date().toDateString()
 };
 
-// ===== UTILITIES =====
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -35,11 +32,7 @@ function log(message, type = 'info') {
     entry.className = `log-entry log-${type}`;
     entry.innerHTML = `<span class="log-time">[${time}]</span>${message}`;
     container.insertBefore(entry, container.firstChild);
-    
-    // Limit log entries
-    while (container.children.length > 100) {
-        container.removeChild(container.lastChild);
-    }
+    while (container.children.length > 100) container.removeChild(container.lastChild);
     console.log(`[${type.toUpperCase()}]`, message);
 }
 
@@ -51,24 +44,18 @@ function generateId() {
     return 'url_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
 
-// ===== LOCAL STORAGE =====
 function saveState() {
     localStorage.setItem('gsc_urls', JSON.stringify(STATE.urls));
-    localStorage.setItem('gsc_quota', JSON.stringify({
-        used: STATE.quotaUsed,
-        date: STATE.quotaDate
-    }));
+    localStorage.setItem('gsc_quota', JSON.stringify({ used: STATE.quotaUsed, date: STATE.quotaDate }));
 }
 
 function loadState() {
     try {
         const urls = localStorage.getItem('gsc_urls');
         if (urls) STATE.urls = JSON.parse(urls);
-        
         const quota = localStorage.getItem('gsc_quota');
         if (quota) {
             const q = JSON.parse(quota);
-            // Reset quota if new day
             if (q.date === new Date().toDateString()) {
                 STATE.quotaUsed = q.used;
                 STATE.quotaDate = q.date;
@@ -79,11 +66,10 @@ function loadState() {
             }
         }
     } catch (e) {
-        log('Failed to load saved state: ' + e.message, 'error');
+        log('Failed to load state: ' + e.message, 'error');
     }
 }
 
-// ===== QUOTA =====
 function updateQuotaUI() {
     const percent = (STATE.quotaUsed / CONFIG.DAILY_LIMIT) * 100;
     $('quotaBar').style.width = Math.min(percent, 100) + '%';
@@ -99,31 +85,24 @@ function incrementQuota() {
 
 function checkQuota() {
     if (STATE.quotaUsed >= CONFIG.DAILY_LIMIT) {
-        log('Daily quota limit reached (200/day)!', 'error');
+        log('Daily quota limit reached!', 'error');
         return false;
     }
     return true;
 }
 
-// ===== JWT SIGNING (RS256) =====
+// ===== JWT + ACCESS TOKEN =====
 async function getAccessToken() {
-    if (!STATE.serviceAccount) {
-        throw new Error('Service Account JSON belum diupload!');
+    if (!STATE.serviceAccount) throw new Error('Service Account JSON belum diupload!');
+    if (STATE.accessToken && Date.now() < STATE.tokenExpiry - 60000) return STATE.accessToken;
+    
+    log('Generating Access Token via JWT RS256...', 'info');
+    
+    if (typeof KJUR === 'undefined') {
+        throw new Error('Library jsrsasign belum ter-load. Refresh halaman!');
     }
     
-    // Return cached token if still valid (with 60s buffer)
-    if (STATE.accessToken && Date.now() < STATE.tokenExpiry - 60000) {
-        return STATE.accessToken;
-    }
-    
-    log('Generating new Access Token via JWT...', 'info');
-    
-    const header = {
-        alg: 'RS256',
-        typ: 'JWT',
-        kid: STATE.serviceAccount.private_key_id
-    };
-    
+    const header = { alg: 'RS256', typ: 'JWT', kid: STATE.serviceAccount.private_key_id };
     const now = Math.floor(Date.now() / 1000);
     const payload = {
         iss: STATE.serviceAccount.client_email,
@@ -133,14 +112,9 @@ async function getAccessToken() {
         iat: now
     };
     
-    // Sign JWT with RS256 using jsrsasign
-    const sHeader = JSON.stringify(header);
-    const sPayload = JSON.stringify(payload);
-    const privateKey = STATE.serviceAccount.private_key;
+    const jwt = KJUR.jws.JWS.sign('RS256', JSON.stringify(header), JSON.stringify(payload), STATE.serviceAccount.private_key);
+    log('JWT signed successfully', 'success');
     
-    const jwt = KJUR.jws.JWS.sign('RS256', sHeader, sPayload, privateKey);
-    
-    // Exchange JWT for Access Token
     const response = await fetch(proxyUrl(CONFIG.TOKEN_URL), {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -158,134 +132,117 @@ async function getAccessToken() {
     const data = await response.json();
     STATE.accessToken = data.access_token;
     STATE.tokenExpiry = Date.now() + (data.expires_in * 1000);
-    
-    log('Access Token berhasil di-generate ✅', 'success');
+    log('Access Token OK ✅', 'success');
     return STATE.accessToken;
 }
 
-// ===== SERVICE ACCOUNT UPLOAD =====
+// ===== UPLOAD HANDLER (FIXED & VERBOSE) =====
 $('jsonFile').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     
+    log(`📂 File: ${file.name} (${file.size} bytes)`, 'info');
+    
     try {
         const text = await file.text();
-        const json = JSON.parse(text);
+        log('✅ File terbaca', 'info');
         
-        // Validate
-        if (!json.private_key || !json.client_email || json.type !== 'service_account') {
-            throw new Error('File JSON bukan Service Account yang valid!');
+        let json;
+        try {
+            json = JSON.parse(text);
+        } catch (parseErr) {
+            throw new Error('JSON tidak valid: ' + parseErr.message);
         }
+        log(`✅ JSON valid. Fields: ${Object.keys(json).join(', ')}`, 'info');
+        
+        if (json.type !== 'service_account') {
+            throw new Error(`Type harus "service_account", ditemukan: "${json.type}"`);
+        }
+        if (!json.private_key) throw new Error('Field "private_key" tidak ada!');
+        if (!json.client_email) throw new Error('Field "client_email" tidak ada!');
+        
+        if (typeof KJUR === 'undefined') {
+            throw new Error('jsrsasign gagal load. Cek koneksi internet & refresh!');
+        }
+        log('✅ jsrsasign ready', 'info');
         
         STATE.serviceAccount = json;
-        STATE.accessToken = null; // Reset token
+        STATE.accessToken = null;
         
         const status = $('authStatus');
         status.className = 'status-text success';
-        status.innerHTML = `✅ Authenticated: <strong>${json.client_email}</strong>`;
+        status.innerHTML = `✅ Loaded: <strong>${json.client_email}</strong>`;
+        log(`Service Account: ${json.client_email}`, 'success');
         
-        log(`Service Account loaded: ${json.client_email}`, 'success');
-        
-        // Test token generation
+        log('🔄 Testing token generation...', 'info');
         await getAccessToken();
+        log('🎉 Authentication berhasil! Siap pakai.', 'success');
         
     } catch (err) {
         const status = $('authStatus');
         status.className = 'status-text error';
-        status.innerHTML = `❌ Error: ${err.message}`;
-        log('Auth error: ' + err.message, 'error');
+        status.innerHTML = `❌ ${err.message}`;
+        log('❌ ERROR: ' + err.message, 'error');
+        console.error('Full error:', err);
         STATE.serviceAccount = null;
+        alert('Error: ' + err.message);
     }
 });
 
-// ===== INDEXING API =====
+// ===== API CALLS =====
 async function submitToIndexing(url, type = 'URL_UPDATED') {
     if (!checkQuota()) throw new Error('Quota exceeded');
-    
     const token = await getAccessToken();
-    
     const response = await fetch(proxyUrl(CONFIG.INDEXING_API), {
         method: 'POST',
-        headers: {
-            'Authorization': 'Bearer ' + token,
-            'Content-Type': 'application/json'
-        },
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: url, type: type })
     });
-    
     incrementQuota();
-    
     if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         throw new Error(err.error?.message || `HTTP ${response.status}`);
     }
-    
     return await response.json();
 }
 
-// ===== URL INSPECTION API =====
 async function inspectUrl(url) {
     if (!checkQuota()) throw new Error('Quota exceeded');
-    
     const token = await getAccessToken();
-    
-    // Extract site URL (origin)
     const urlObj = new URL(url);
     const siteUrl = urlObj.origin + '/';
-    
     const response = await fetch(proxyUrl(CONFIG.INSPECTION_API), {
         method: 'POST',
-        headers: {
-            'Authorization': 'Bearer ' + token,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            inspectionUrl: url,
-            siteUrl: siteUrl
-        })
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inspectionUrl: url, siteUrl: siteUrl })
     });
-    
     incrementQuota();
-    
     if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         throw new Error(err.error?.message || `HTTP ${response.status}`);
     }
-    
     const data = await response.json();
     const verdict = data.inspectionResult?.indexStatusResult?.verdict || 'UNKNOWN';
     const coverageState = data.inspectionResult?.indexStatusResult?.coverageState || '';
-    
-    return {
-        verdict: verdict,
-        coverage: coverageState,
-        isIndexed: verdict === 'PASS'
-    };
+    return { verdict, coverage: coverageState, isIndexed: verdict === 'PASS' };
 }
 
-// ===== URL REMOVAL (via Indexing API URL_DELETED) =====
 async function removeUrlFromIndex(url) {
     return await submitToIndexing(url, 'URL_DELETED');
 }
 
-// ===== TABLE MANAGEMENT =====
+// ===== TABLE =====
 function addUrlToTable(url) {
-    // Check duplicate
     if (STATE.urls.find(u => u.url === url)) {
-        log(`URL sudah ada di tabel: ${url}`, 'warning');
+        log(`URL sudah ada: ${url}`, 'warning');
         return null;
     }
-    
     const item = {
-        id: generateId(),
-        url: url,
-        apiStatus: 'pending',
-        apiMessage: 'Belum disubmit',
-        indexStatus: 'pending',
-        indexMessage: 'Belum dicek',
+        id: generateId(), url: url,
+        apiStatus: 'pending', apiMessage: 'Belum disubmit',
+        indexStatus: 'pending', indexMessage: 'Belum dicek',
         timestamp: Date.now()
     };
-    
     STATE.urls.push(item);
     saveState();
     renderTable();
@@ -308,29 +265,24 @@ function deleteUrl(id) {
 
 function renderTable() {
     const tbody = $('tableBody');
-    
     if (STATE.urls.length === 0) {
-        tbody.innerHTML = `<tr class="empty-row"><td colspan="5">No URLs added yet. Use the input panels above.</td></tr>`;
+        tbody.innerHTML = `<tr class="empty-row"><td colspan="5">No URLs added yet.</td></tr>`;
         updateStats();
         return;
     }
-    
     tbody.innerHTML = STATE.urls.map((item, idx) => `
         <tr data-id="${item.id}">
             <td>${idx + 1}</td>
-            <td class="url-cell"><a href="${item.url}" target="_blank" rel="noopener">${item.url}</a></td>
+            <td class="url-cell"><a href="${item.url}" target="_blank">${item.url}</a></td>
             <td>${renderApiPill(item)}</td>
             <td>${renderIndexPill(item)}</td>
-            <td>
-                <div class="action-buttons">
-                    <button class="btn-icon" onclick="checkSingleUrl('${item.id}')" title="Cek Index">🔍</button>
-                    <button class="btn-icon" onclick="resubmitUrl('${item.id}')" title="Submit Index">📤</button>
-                    <button class="btn-icon delete" onclick="deleteUrl('${item.id}'); log('URL dihapus dari tabel','info')" title="Hapus Baris">🗑️</button>
-                </div>
-            </td>
+            <td><div class="action-buttons">
+                <button class="btn-icon" onclick="checkSingleUrl('${item.id}')">🔍</button>
+                <button class="btn-icon" onclick="resubmitUrl('${item.id}')">📤</button>
+                <button class="btn-icon delete" onclick="deleteUrl('${item.id}')">🗑️</button>
+            </div></td>
         </tr>
     `).join('');
-    
     updateStats();
 }
 
@@ -339,7 +291,7 @@ function renderApiPill(item) {
         'success': `<span class="status-pill pill-success">✅ Success</span>`,
         'error': `<span class="status-pill pill-danger" title="${item.apiMessage}">❌ Error</span>`,
         'pending': `<span class="status-pill pill-pending">⏳ Pending</span>`,
-        'loading': `<span class="status-pill pill-warning loading">⏳ Processing...</span>`
+        'loading': `<span class="status-pill pill-warning loading">⏳ Processing</span>`
     };
     return map[item.apiStatus] || map.pending;
 }
@@ -347,9 +299,9 @@ function renderApiPill(item) {
 function renderIndexPill(item) {
     const map = {
         'indexed': `<span class="status-pill pill-success">TERINDEX ✅</span>`,
-        'not_indexed': `<span class="status-pill pill-danger" title="${item.indexMessage}">BELUM TERINDEX ❌</span>`,
+        'not_indexed': `<span class="status-pill pill-danger">BELUM TERINDEX ❌</span>`,
         'pending': `<span class="status-pill pill-pending">⏳ Belum Dicek</span>`,
-        'loading': `<span class="status-pill pill-warning loading">🔍 Checking...</span>`,
+        'loading': `<span class="status-pill pill-warning loading">🔍 Checking</span>`,
         'error': `<span class="status-pill pill-danger" title="${item.indexMessage}">⚠️ Error</span>`
     };
     return map[item.indexStatus] || map.pending;
@@ -362,19 +314,11 @@ function updateStats() {
     $('statPending').textContent = STATE.urls.filter(u => u.indexStatus === 'pending').length;
 }
 
-// ===== ROW ACTIONS =====
 window.checkSingleUrl = async function(id) {
     const item = STATE.urls.find(u => u.id === id);
     if (!item) return;
-    
-    if (!STATE.serviceAccount) {
-        log('Upload Service Account JSON terlebih dahulu!', 'error');
-        return;
-    }
-    
+    if (!STATE.serviceAccount) return alert('Upload JSON dulu!');
     updateUrlItem(id, { indexStatus: 'loading' });
-    log(`Checking index status: ${item.url}`, 'info');
-    
     try {
         const result = await inspectUrl(item.url);
         updateUrlItem(id, {
@@ -384,25 +328,18 @@ window.checkSingleUrl = async function(id) {
         log(`${item.url} → ${result.isIndexed ? 'TERINDEX ✅' : 'BELUM TERINDEX ❌'}`, result.isIndexed ? 'success' : 'warning');
     } catch (err) {
         updateUrlItem(id, { indexStatus: 'error', indexMessage: err.message });
-        log(`Inspection error: ${err.message}`, 'error');
+        log(`Error: ${err.message}`, 'error');
     }
 };
 
 window.resubmitUrl = async function(id) {
     const item = STATE.urls.find(u => u.id === id);
     if (!item) return;
-    
-    if (!STATE.serviceAccount) {
-        log('Upload Service Account JSON terlebih dahulu!', 'error');
-        return;
-    }
-    
+    if (!STATE.serviceAccount) return alert('Upload JSON dulu!');
     updateUrlItem(id, { apiStatus: 'loading' });
-    log(`Submitting to Indexing API: ${item.url}`, 'info');
-    
     try {
         await submitToIndexing(item.url, 'URL_UPDATED');
-        updateUrlItem(id, { apiStatus: 'success', apiMessage: 'Submitted successfully' });
+        updateUrlItem(id, { apiStatus: 'success', apiMessage: 'Submitted' });
         log(`Submitted: ${item.url}`, 'success');
     } catch (err) {
         updateUrlItem(id, { apiStatus: 'error', apiMessage: err.message });
@@ -413,165 +350,118 @@ window.resubmitUrl = async function(id) {
 window.deleteUrl = deleteUrl;
 
 // ===== EVENT HANDLERS =====
-
-// Manual Indexing
 $('submitManualBtn').addEventListener('click', async () => {
     const url = $('manualUrl').value.trim();
-    if (!url) return alert('Masukkan URL terlebih dahulu!');
-    if (!STATE.serviceAccount) return alert('Upload Service Account JSON dulu!');
-    
+    if (!url) return alert('Masukkan URL!');
+    if (!STATE.serviceAccount) return alert('Upload JSON dulu!');
     const item = addUrlToTable(url);
     if (!item) return;
-    
     $('manualUrl').value = '';
     await window.resubmitUrl(item.id);
 });
 
-// Sitemap Bulk Load
 $('loadSitemapBtn').addEventListener('click', async () => {
     const sitemapUrl = $('sitemapUrl').value.trim();
     if (!sitemapUrl) return alert('Masukkan URL sitemap!');
-    
     log(`Loading sitemap: ${sitemapUrl}`, 'info');
-    
     try {
         const response = await fetch(proxyUrl(sitemapUrl));
-        if (!response.ok) throw new Error('Failed to fetch sitemap');
-        
+        if (!response.ok) throw new Error('Failed to fetch');
         const xmlText = await response.text();
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-        
-        // Check if it's a sitemap index
         const sitemapElements = xmlDoc.querySelectorAll('sitemap > loc');
         let allUrls = [];
-        
         if (sitemapElements.length > 0) {
-            log(`Sitemap index detected, scanning ${sitemapElements.length} sub-sitemaps...`, 'info');
+            log(`Sitemap index detected: ${sitemapElements.length} sub-sitemaps`, 'info');
             for (const loc of sitemapElements) {
                 try {
                     const subResp = await fetch(proxyUrl(loc.textContent.trim()));
                     const subText = await subResp.text();
                     const subDoc = parser.parseFromString(subText, 'text/xml');
-                    const subUrls = subDoc.querySelectorAll('url > loc');
-                    subUrls.forEach(u => allUrls.push(u.textContent.trim()));
+                    subDoc.querySelectorAll('url > loc').forEach(u => allUrls.push(u.textContent.trim()));
                 } catch (e) {
-                    log(`Failed sub-sitemap: ${e.message}`, 'error');
+                    log(`Sub-sitemap error: ${e.message}`, 'error');
                 }
             }
         } else {
-            const urlElements = xmlDoc.querySelectorAll('url > loc');
-            urlElements.forEach(u => allUrls.push(u.textContent.trim()));
+            xmlDoc.querySelectorAll('url > loc').forEach(u => allUrls.push(u.textContent.trim()));
         }
-        
-        if (allUrls.length === 0) {
-            log('Tidak ada URL ditemukan di sitemap', 'warning');
-            return;
-        }
-        
+        if (allUrls.length === 0) return log('Tidak ada URL ditemukan', 'warning');
         let added = 0;
-        allUrls.forEach(url => {
-            if (addUrlToTable(url)) added++;
-        });
-        
-        log(`Sitemap loaded: ${added} URL baru ditambahkan (total ${allUrls.length} ditemukan)`, 'success');
+        allUrls.forEach(url => { if (addUrlToTable(url)) added++; });
+        log(`Sitemap loaded: ${added} URL baru (${allUrls.length} total)`, 'success');
         $('sitemapUrl').value = '';
-        
     } catch (err) {
         log(`Sitemap error: ${err.message}`, 'error');
-        alert('Gagal load sitemap: ' + err.message);
+        alert('Error: ' + err.message);
     }
 });
 
-// URL Removal
 $('removeUrlBtn').addEventListener('click', async () => {
     const url = $('removeUrl').value.trim();
-    if (!url) return alert('Masukkan URL untuk dihapus!');
-    if (!STATE.serviceAccount) return alert('Upload Service Account JSON dulu!');
-    if (!confirm(`Yakin hapus URL ini dari Google Index?\n${url}`)) return;
-    
-    log(`Requesting URL removal: ${url}`, 'warning');
-    
+    if (!url) return alert('Masukkan URL!');
+    if (!STATE.serviceAccount) return alert('Upload JSON dulu!');
+    if (!confirm(`Hapus dari index?\n${url}`)) return;
+    log(`Removing: ${url}`, 'warning');
     try {
         await removeUrlFromIndex(url);
-        log(`URL removal request submitted: ${url}`, 'success');
-        alert('URL removal request berhasil dikirim ke Google!');
+        log(`Removed: ${url}`, 'success');
+        alert('Removal request berhasil!');
         $('removeUrl').value = '';
     } catch (err) {
         log(`Removal error: ${err.message}`, 'error');
-        alert('Gagal: ' + err.message);
+        alert('Error: ' + err.message);
     }
 });
 
-// SCAN ALL INDEX STATUS - FITUR UTAMA (LANJUTAN)
 $('scanAllBtn').addEventListener('click', async () => {
-    if (!STATE.serviceAccount) return alert('Upload Service Account JSON dulu!');
-    if (STATE.urls.length === 0) return alert('Tabel kosong! Tambahkan URL dulu.');
-    if (!confirm(`Scan ${STATE.urls.length} URL? Ini akan menggunakan kuota API.`)) return;
-    
+    if (!STATE.serviceAccount) return alert('Upload JSON dulu!');
+    if (STATE.urls.length === 0) return alert('Tabel kosong!');
+    if (!confirm(`Scan ${STATE.urls.length} URL?`)) return;
     const btn = $('scanAllBtn');
     btn.disabled = true;
-    
     const total = STATE.urls.length;
     let processed = 0;
-    
     showProgress('Scanning Index Status', total);
-    log(`=== Starting bulk scan: ${total} URLs ===`, 'info');
-    
+    log(`=== Scan started: ${total} URLs ===`, 'info');
     for (const item of STATE.urls) {
-        if (!checkQuota()) {
-            log('Quota habis, scan dihentikan!', 'error');
-            break;
-        }
-        
+        if (!checkQuota()) break;
         updateUrlItem(item.id, { indexStatus: 'loading' });
-        
         try {
             const result = await inspectUrl(item.url);
             updateUrlItem(item.id, {
                 indexStatus: result.isIndexed ? 'indexed' : 'not_indexed',
                 indexMessage: result.coverage || result.verdict
             });
-            log(`[${processed + 1}/${total}] ${item.url} → ${result.isIndexed ? 'TERINDEX ✅' : 'BELUM TERINDEX ❌'}`, result.isIndexed ? 'success' : 'warning');
+            log(`[${processed + 1}/${total}] ${result.isIndexed ? 'TERINDEX ✅' : 'BELUM ❌'} - ${item.url}`, result.isIndexed ? 'success' : 'warning');
         } catch (err) {
             updateUrlItem(item.id, { indexStatus: 'error', indexMessage: err.message });
             log(`[${processed + 1}/${total}] Error: ${err.message}`, 'error');
         }
-        
         processed++;
         updateProgress(processed, total);
         await sleep(CONFIG.DELAY_BETWEEN_REQUESTS);
     }
-    
     hideProgress();
     btn.disabled = false;
-    log(`=== Bulk scan complete: ${processed}/${total} processed ===`, 'success');
-    alert(`Scan selesai! ${processed} URL telah diperiksa.`);
+    log(`=== Scan complete: ${processed}/${total} ===`, 'success');
+    alert(`Selesai! ${processed} URL diperiksa.`);
 });
 
-// SUBMIT ALL URLs - Bulk Indexing
 $('submitAllBtn').addEventListener('click', async () => {
-    if (!STATE.serviceAccount) return alert('Upload Service Account JSON dulu!');
+    if (!STATE.serviceAccount) return alert('Upload JSON dulu!');
     if (STATE.urls.length === 0) return alert('Tabel kosong!');
-    if (!confirm(`Submit ${STATE.urls.length} URL ke Indexing API?`)) return;
-    
+    if (!confirm(`Submit ${STATE.urls.length} URL?`)) return;
     const btn = $('submitAllBtn');
     btn.disabled = true;
-    
     const total = STATE.urls.length;
     let processed = 0;
-    
-    showProgress('Submitting to Indexing API', total);
-    log(`=== Bulk submit started: ${total} URLs ===`, 'info');
-    
+    showProgress('Submitting URLs', total);
+    log(`=== Submit started: ${total} URLs ===`, 'info');
     for (const item of STATE.urls) {
-        if (!checkQuota()) {
-            log('Quota habis!', 'error');
-            break;
-        }
-        
+        if (!checkQuota()) break;
         updateUrlItem(item.id, { apiStatus: 'loading' });
-        
         try {
             await submitToIndexing(item.url, 'URL_UPDATED');
             updateUrlItem(item.id, { apiStatus: 'success', apiMessage: 'Submitted' });
@@ -580,47 +470,35 @@ $('submitAllBtn').addEventListener('click', async () => {
             updateUrlItem(item.id, { apiStatus: 'error', apiMessage: err.message });
             log(`[${processed + 1}/${total}] Failed: ${err.message}`, 'error');
         }
-        
         processed++;
         updateProgress(processed, total);
         await sleep(CONFIG.DELAY_BETWEEN_REQUESTS);
     }
-    
     hideProgress();
     btn.disabled = false;
-    log(`=== Bulk submit complete ===`, 'success');
-    alert(`Submit selesai! ${processed}/${total} URL diproses.`);
+    log(`=== Submit complete ===`, 'success');
+    alert(`Selesai! ${processed}/${total} diproses.`);
 });
 
-// CLEAR ALL
 $('clearAllBtn').addEventListener('click', () => {
     if (STATE.urls.length === 0) return;
-    if (!confirm(`Hapus semua ${STATE.urls.length} URL dari tabel?`)) return;
+    if (!confirm(`Hapus semua ${STATE.urls.length} URL?`)) return;
     STATE.urls = [];
     saveState();
     renderTable();
     log('Tabel dikosongkan', 'warning');
 });
 
-// EXPORT CSV
 $('exportBtn').addEventListener('click', () => {
     if (STATE.urls.length === 0) return alert('Tabel kosong!');
-    
     const headers = ['No', 'URL', 'API Status', 'API Message', 'Index Status', 'Index Message', 'Timestamp'];
     const rows = STATE.urls.map((item, idx) => [
-        idx + 1,
-        item.url,
-        item.apiStatus,
-        item.apiMessage,
-        item.indexStatus,
-        item.indexMessage,
-        new Date(item.timestamp).toISOString()
+        idx + 1, item.url, item.apiStatus, item.apiMessage,
+        item.indexStatus, item.indexMessage, new Date(item.timestamp).toISOString()
     ]);
-    
     const csv = [headers, ...rows]
         .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
         .join('\n');
-    
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -631,9 +509,8 @@ $('exportBtn').addEventListener('click', () => {
     log('CSV exported', 'success');
 });
 
-// RESET QUOTA
 $('resetQuotaBtn').addEventListener('click', () => {
-    if (!confirm('Reset counter kuota? (Hanya reset hitungan lokal, bukan kuota Google)')) return;
+    if (!confirm('Reset counter kuota?')) return;
     STATE.quotaUsed = 0;
     STATE.quotaDate = new Date().toDateString();
     saveState();
@@ -678,11 +555,12 @@ function init() {
     log('🔥 GSC VIP Manager initialized', 'success');
     log('Upload Service Account JSON untuk mulai', 'info');
     
-    // Check jsrsasign loaded
     if (typeof KJUR === 'undefined') {
-        log('⚠️ jsrsasign library gagal dimuat! Cek koneksi internet.', 'error');
+        log('⚠️ jsrsasign library gagal dimuat! Refresh halaman.', 'error');
+    } else {
+        log('✅ jsrsasign ready', 'success');
     }
 }
 
-// Run on load
 document.addEventListener('DOMContentLoaded', init);
+
