@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Upload JSON</title>
+    <script src="https://cdn.jsdelivr.net/npm/jsrsasign@11.1.0/lib/jsrsasign-all-min.js"></script>
+</head>
+<body style="background:#000;color:#fff;font-family:monospace;padding:20px;">
+    <h2>🔧 TEST UPLOAD JSON</h2>
+    <input type="file" id="file" accept=".json" style="padding:10px;">
+    <pre id="output" style="background:#111;padding:15px;margin-top:20px;border:1px solid #ff6b00;white-space:pre-wrap;"></pre>
+
+    <script>
+        const out = document.getElementById('output');
+        function p(msg, color='#fff') {
+            out.innerHTML += `<span style="color:${color}">${msg}</span>\n`;
+        }
+
+        // Test 1: Library check
+        p('=== TEST 1: Library Check ===', '#ff6b00');
+        if (typeof KJUR !== 'undefined') {
+            p('✅ jsrsasign LOADED', '#00d97e');
+        } else {
+            p('❌ jsrsasign GAGAL LOAD - cek koneksi internet!', '#ff4444');
+        }
+
+        // Test 2: Upload
+        document.getElementById('file').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            p('\n=== TEST 2: File Upload ===', '#ff6b00');
+            
+            if (!file) {
+                p('❌ No file selected', '#ff4444');
+                return;
+            }
+            
+            p(`✅ File name: ${file.name}`, '#00d97e');
+            p(`✅ File size: ${file.size} bytes`, '#00d97e');
+            p(`✅ File type: ${file.type}`, '#00d97e');
+            
+            try {
+                const text = await file.text();
+                p(`✅ File berhasil dibaca (${text.length} chars)`, '#00d97e');
+                
+                p('\n=== TEST 3: JSON Parse ===', '#ff6b00');
+                const json = JSON.parse(text);
+                p('✅ JSON valid!', '#00d97e');
+                p(`Fields: ${Object.keys(json).join(', ')}`, '#fff');
+                p(`Type: ${json.type}`, '#fff');
+                p(`Email: ${json.client_email}`, '#fff');
+                p(`Project: ${json.project_id}`, '#fff');
+                p(`Has private_key: ${!!json.private_key}`, '#fff');
+                
+                p('\n=== TEST 4: JWT Sign ===', '#ff6b00');
+                if (typeof KJUR === 'undefined') {
+                    p('❌ Skip - jsrsasign not loaded', '#ff4444');
+                    return;
+                }
+                
+                const header = { alg: 'RS256', typ: 'JWT' };
+                const now = Math.floor(Date.now() / 1000);
+                const payload = {
+                    iss: json.client_email,
+                    scope: 'https://www.googleapis.com/auth/indexing',
+                    aud: 'https://oauth2.googleapis.com/token',
+                    exp: now + 3600,
+                    iat: now
+                };
+                
+                const jwt = KJUR.jws.JWS.sign('RS256', JSON.stringify(header), JSON.stringify(payload), json.private_key);
+                p('✅ JWT signed berhasil!', '#00d97e');
+                p(`JWT length: ${jwt.length}`, '#fff');
+                
+                p('\n=== TEST 5: Token Request ===', '#ff6b00');
+                p('Mencoba request access token...', '#ffb800');
+                
+                const proxies = [
+                    'https://corsproxy.io/?',
+                    'https://api.allorigins.win/raw?url=',
+                    'https://cors-anywhere.herokuapp.com/'
+                ];
+                
+                for (const proxy of proxies) {
+                    p(`\nMencoba proxy: ${proxy}`, '#ffb800');
+                    try {
+                        const url = proxy + encodeURIComponent('https://oauth2.googleapis.com/token');
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: new URLSearchParams({
+                                grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                                assertion: jwt
+                            })
+                        });
+                        
+                        const text = await response.text();
+                        p(`Status: ${response.status}`, response.ok ? '#00d97e' : '#ff4444');
+                        p(`Response: ${text.substring(0, 300)}`, '#fff');
+                        
+                        if (response.ok) {
+                            p(`\n🎉 PROXY YANG WORK: ${proxy}`, '#00d97e');
+                            break;
+                        }
+                    } catch (err) {
+                        p(`❌ Error: ${err.message}`, '#ff4444');
+                    }
+                }
+                
+            } catch (err) {
+                p(`\n❌ ERROR: ${err.message}`, '#ff4444');
+                p(`Stack: ${err.stack}`, '#888');
+            }
+        });
+    </script>
+</body>
+</html>
